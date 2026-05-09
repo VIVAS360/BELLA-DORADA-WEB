@@ -5,6 +5,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
 const {
     bd_ensure_data_files,
     bd_read_json,
@@ -44,6 +45,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(cookieParser('bella-dorada-secret'));
 app.use(session({
     secret: 'bella-dorada-secret',
     resave: false,
@@ -99,6 +101,8 @@ app.post('/admin', (req, res) => {
     if (user) {
         const { password: _, ...userWithoutPassword } = user;
         req.session.bd_user = userWithoutPassword;
+        // Also set signed cookie for serverless compatibility
+        res.cookie('user_id', String(user.id), { signed: true, maxAge: 24 * 60 * 60 * 1000 }); // 24 hours
         return res.redirect('/admin/dashboard');
     }
     res.render('admin/login', { error: 'Usuario o contraseña incorrectos.', bd_h });
@@ -459,6 +463,7 @@ app.get('/admin/productos_individuales/eliminar/:id', (req, res) => {
 app.get('/admin/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) console.error('Error destroying session:', err);
+        res.clearCookie('user_id');
         res.redirect('/admin');
     });
 });

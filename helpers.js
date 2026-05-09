@@ -100,7 +100,23 @@ function bd_h(value) {
 }
 
 function bd_current_user(req) {
-    return req.session.bd_user || null;
+    // Try session first (for local development)
+    if (req.session && req.session.bd_user) {
+        return req.session.bd_user;
+    }
+    
+    // Try signed cookie (for production/serverless)
+    if (req.signedCookies && req.signedCookies.user_id) {
+        const usuarios = bd_read_json(BD_USUARIOS_FILE, []);
+        const user = usuarios.find(u => String(u.id) === String(req.signedCookies.user_id));
+        if (user) {
+            // Cache in session if available
+            if (req.session) req.session.bd_user = user;
+            return user;
+        }
+    }
+    
+    return null;
 }
 
 function bd_require_login(req, res) {
