@@ -33,10 +33,17 @@ const {
     BD_PEDIDOS_FILE,
     BD_COMPRAS_FILE,
     BD_ROLES_FILE,
+    BD_PRESENTACIONES_FILE,
+    bd_load_presentaciones,
+    bd_save_presentaciones,
+    bd_presentaciones_default,
+    bd_presentacion_slug,
+    bd_unique_presentacion_id,
+    bd_find_presentacion,
 } = require('./helpers');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3007;
 
 // Configurar EJS
 app.set('view engine', 'ejs');
@@ -45,7 +52,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(cookieParser('bella-dorada-secret'));
+app.use(cookieParser());
 app.use(session({
     secret: 'bella-dorada-secret',
     resave: false,
@@ -53,6 +60,7 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, 'admin/assets')));
 app.use('/uploads', express.static(path.join(__dirname, 'assets/uploads')));
+app.use(express.static(path.join(__dirname)));
 
 // Configurar multer para subidas
 const upload = multer({
@@ -86,12 +94,15 @@ function renderFooter() {
 }
 
 // Rutas
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.get('/admin', (req, res) => {
     if (bd_current_user(req)) {
         return res.redirect('/admin/dashboard');
     }
-    let error = '';
-    res.render('admin/login', { error, bd_h });
+    res.render('admin/login', { error: '', bd_h });
 });
 
 app.post('/admin', (req, res) => {
@@ -101,8 +112,8 @@ app.post('/admin', (req, res) => {
     if (user) {
         const { password: _, ...userWithoutPassword } = user;
         req.session.bd_user = userWithoutPassword;
-        // Also set signed cookie for serverless compatibility
-        res.cookie('user_id', String(user.id), { signed: true, maxAge: 24 * 60 * 60 * 1000 }); // 24 hours
+        // Also set cookie for serverless compatibility
+        res.cookie('user_id', String(user.id), { maxAge: 24 * 60 * 60 * 1000 }); // 24 hours
         return res.redirect('/admin/dashboard');
     }
     res.render('admin/login', { error: 'Usuario o contraseña incorrectos.', bd_h });
@@ -407,7 +418,7 @@ app.post('/admin/productos_individuales', (req, res) => {
         const uploadPath = path.join(__dirname, 'assets/uploads/productos');
         if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
         const ext = path.extname(req.file.originalname);
-        const safeName = nombre.replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        const safeName = (nombre || 'producto').replace(/[^a-zA-Z0-9_\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
         const fileName = `${safeName}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}${ext}`;
         const fullPath = path.join(uploadPath, fileName);
         fs.writeFileSync(fullPath, req.file.buffer);
@@ -416,12 +427,12 @@ app.post('/admin/productos_individuales', (req, res) => {
     const productoNuevo = {
         id: id ? parseInt(id) : bd_next_id(catalogo.productos),
         tipo_producto: 'individual',
-        codigo: codigo.trim(),
-        nombre: nombre.trim(),
-        categoria: categoria.trim(),
-        descripcion: descripcion.trim(),
-        precio: precio.trim(),
-        coste: coste.trim(),
+        codigo: (codigo || '').trim(),
+        nombre: (nombre || '').trim(),
+        categoria: (categoria || '').trim(),
+        descripcion: (descripcion || '').trim(),
+        precio: (precio || '').trim(),
+        coste: (coste || '').trim(),
         stock: Math.max(0, parseInt(stock) || 0),
         imagen: imagenFinal,
         destacado: destacado === 'on',
@@ -480,13 +491,13 @@ app.post('/admin/presentaciones', (req, res) => {
     if (!bd_require_login(req, res)) return;
     const { id_original, id, icon, nombre, descripcion, precioBase, orden, estado } = req.body;
     let presentaciones = bd_load_presentaciones();
-    const idInput = id.trim() || nombre.trim();
+    const idInput = (id || '').trim() || (nombre || '').trim();
     const idFinal = bd_unique_presentacion_id(idInput, presentaciones, id_original);
     const presentacionNueva = {
         id: idFinal,
-        icon: icon.trim() || '💐',
-        nombre: nombre.trim(),
-        descripcion: descripcion.trim(),
+        icon: (icon || '').trim() || '💐',
+        nombre: (nombre || '').trim(),
+        descripcion: (descripcion || '').trim(),
         precioBase: bd_price_to_float(precioBase || 0),
         orden: parseInt(orden) || 999,
         estado: estado !== undefined,

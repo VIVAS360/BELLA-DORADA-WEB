@@ -38,6 +38,10 @@ function bd_ensure_data_files() {
         bd_write_json(BD_COMPRAS_FILE, []);
     }
 
+    if (!fs.existsSync(BD_PRESENTACIONES_FILE)) {
+        bd_write_json(BD_PRESENTACIONES_FILE, { presentaciones: bd_presentaciones_default() });
+    }
+
     if (!fs.existsSync(BD_ROLES_FILE) || bd_read_json(BD_ROLES_FILE, []).length === 0) {
         bd_write_json(BD_ROLES_FILE, [
             { id: 'admin', nombre: 'Administrador', permisos: ['dashboard', 'productos', 'pedidos', 'compras', 'usuarios', 'roles'] },
@@ -105,10 +109,10 @@ function bd_current_user(req) {
         return req.session.bd_user;
     }
     
-    // Try signed cookie (for production/serverless)
-    if (req.signedCookies && req.signedCookies.user_id) {
+    // Try cookie (for production/serverless)
+    if (req.cookies && req.cookies.user_id) {
         const usuarios = bd_read_json(BD_USUARIOS_FILE, []);
-        const user = usuarios.find(u => String(u.id) === String(req.signedCookies.user_id));
+        const user = usuarios.find(u => String(u.id) === String(req.cookies.user_id));
         if (user) {
             // Cache in session if available
             if (req.session) req.session.bd_user = user;
@@ -328,6 +332,82 @@ function bd_stats() {
         compras_total: comprasTotal,
         usuarios: usuarios.filter(u => u.estado !== false).length,
     };
+}
+
+// Funciones para presentaciones
+function bd_load_presentaciones() {
+    const data = bd_read_json(BD_PRESENTACIONES_FILE, { presentaciones: [] });
+    return data.presentaciones || [];
+}
+
+function bd_save_presentaciones(presentaciones) {
+    return bd_write_json(BD_PRESENTACIONES_FILE, { presentaciones });
+}
+
+function bd_find_presentacion(presentaciones, id) {
+    return presentaciones.find(p => String(p.id) === String(id));
+}
+
+function bd_presentacion_slug(text) {
+    if (!text) return '';
+    return text.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .trim();
+}
+
+function bd_unique_presentacion_id(idInput, presentaciones, excludeId = null) {
+    if (!idInput) return '';
+    let baseId = bd_presentacion_slug(idInput);
+    if (!baseId) return '';
+    let id = baseId;
+    let counter = 1;
+    
+    while (presentaciones.some(p => String(p.id) === id && String(p.id) !== String(excludeId))) {
+        id = `${baseId}-${counter}`;
+        counter++;
+    }
+    
+    return id;
+}
+
+function bd_presentaciones_default() {
+    return [
+        {
+            id: 'ramo_full',
+            icon: '💐',
+            nombre: 'Ramo full',
+            descripcion: 'Grande, llamativo y perfecto para regalo especial.',
+            precioBase: 25000,
+            orden: 1,
+            estado: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+        {
+            id: 'ramo_mini',
+            icon: '🌸',
+            nombre: 'Ramo mini',
+            descripcion: 'Detalle pequeño, bonito y económico.',
+            precioBase: 15000,
+            orden: 2,
+            estado: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+        {
+            id: 'box_belleza',
+            icon: '🎁',
+            nombre: 'Box sorpresa',
+            descripcion: 'Caja de regalo con productos seleccionados.',
+            precioBase: 20000,
+            orden: 3,
+            estado: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+    ];
 }
 
 module.exports = {
